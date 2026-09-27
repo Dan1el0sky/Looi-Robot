@@ -49,10 +49,12 @@ Build the project skeleton and get through protocol research + a working PC-side
 - Cross-reference against the FCC filing (`2BLAY-01`) for the actual BLE chipset/module and motor driver — informs realistic limits (e.g. max safe motor command rate, radio range).
 
 ### Phase 3 — Validate against live traffic
-- No Android device is available, but the protocol is device-side, not platform-side, so validation doesn't require Android specifically. Two options, in order of preference:
-  1. **BLE sniffer dongle** (e.g. Nordic nRF52840 dongle running the Nordic sniffer firmware) plugged into this Windows PC, capturing over-the-air packets with Wireshark while the official app runs on the iPhone 13. Confirms `FE00` payloads and anything Phase 1 found, independent of phone OS.
-  2. If a dongle isn't available/practical: explore what the rootless jailbreak on the iPhone SE can expose (e.g. Apple's PacketLogger workflow, or a CoreBluetooth-logging tweak) as a fallback — noted as lower-confidence/more fragile than a dedicated sniffer.
-- This phase is exploratory and its exact steps depend on what Phase 1 turns up (if the `FE00` format is fully recoverable from static analysis alone, live sniffing may only be needed to spot-check rather than reverse from scratch).
+- **Confirmed: the PC's built-in Bluetooth radios cannot do this.** This machine has an Intel Wireless Bluetooth combo chip and a Broadcom BCM20702B0 dongle; neither supports promiscuous/monitor-mode BLE capture, and that's a hardware/firmware limitation of standard Bluetooth controllers — switching this PC to Linux would not unlock it (BlueZ has the same HCI-level restriction; it only logs the host's own connections, not third-party over-the-air traffic). No BLE sniffer dongle is currently owned.
+- Given that, the plan doesn't depend on sniffing as the primary method:
+  1. **Primary: decompile + direct fuzzing.** Phase 1's decompilation may reveal the `FE00` byte table directly in app source/constants. Separately, since our own Phase 4 controller already connects to the robot as its own BLE central (via `bleak`, no phone involved), we can try candidate `FE00` payloads ourselves and observe the robot's reaction directly — no sniffer needed for this.
+  2. **Optional confirmation: cheap dedicated sniffer.** A real over-the-air capture (to see exactly what the official app sends) still needs dedicated sniffer hardware — e.g. a ~$10 Nordic nRF52840 dongle flashed with Nordic's sniffer firmware, or a TI CC2540-based sniffer dongle. This is inexpensive and works on Windows or Linux, but it's a small hardware purchase, not something built in — buy one later only if fuzzing + decompilation leave gaps.
+  3. Lower-confidence fallback: whatever the rootless jailbreak on the iPhone SE can expose (e.g. a CoreBluetooth-logging tweak) — kept as a last resort, not the plan of record.
+- This phase is exploratory and may end up mostly unnecessary if Phase 1 + direct fuzzing fully resolve `FE00`.
 
 ### Phase 4 — Build the PC control library
 - Package: `controller/looi/` — extend/re-implement (with credit, respecting the reference repo's license) the known-good movement/sensor/handshake logic, then add:
@@ -63,6 +65,11 @@ Build the project skeleton and get through protocol research + a working PC-side
 
 ### Phase 5 — Obstacle-avoidance prototype (exploratory)
 - Once Phase 1 confirms whether/how the stock app does camera-based navigation, prototype an improved version in Python (OpenCV / a small vision model) driving the Phase 4 library — this stays a PC-tethered prototype for now (e.g. laptop webcam or phone-as-webcam), not the final on-device form.
+
+### Deferred — deep-dive into the reference repo (not now)
+- The `reference/` submodule (`andrey-tut/LOOI-Robot`) has more in it than the top-level protocol summary already pulled into this plan: `docs/EXPERIMENTS.md`, `docs/CONTROL_LAB.md`, `docs/FED9_TELEMETRY.md`, `docs/OPEN_QUESTIONS.md`, `docs/ROADMAP.md`, and the actual controller scripts (`looi_keyboard_control.py`, `looi_control_lab.py`, `looi_analyze_sensors.py`).
+- Worth a dedicated pass later to: mine `OPEN_QUESTIONS.md` for anything the maintainer already flagged as unresolved (may overlap with our `FE00`/obstacle-avoidance questions), read the actual Python implementation rather than just the docs summary (docs can drift from code), and check the repo's issues/commit history for any progress since we cloned it (e.g. if `FE00` gets integrated upstream, that removes work from our Phase 1/3).
+- Deferred because Phase 1 (APK decompilation) is a more direct route to the open questions we care about most (`FE00`, obstacle avoidance) — this is a secondary/backfill source, not a blocker.
 
 ### Explicitly deferred (future milestone, not built now)
 - Custom iOS app (Swift + CoreBluetooth) wrapping the validated protocol, behavior engine, and vision logic. Design choices above (clean protocol module, explicit trigger framework) are made so this port is straightforward later, but no iOS code is written in this pass.
